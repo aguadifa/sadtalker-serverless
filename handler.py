@@ -12,14 +12,11 @@ def download_file(url, save_path):
             for chunk in response.iter_content(1024):
                 f.write(chunk)
     else:
-
         raise Exception(f"Download failed: {url}")
 
 def handler(event):
     try:
         job_input = event.get('input', {})
-        
-        # 1. 입력 오디오/이미지 URL 수신
         audio_url = job_input.get('driven_audio')
         image_url = job_input.get('source_image')
         still = job_input.get('still', True)
@@ -27,7 +24,6 @@ def handler(event):
         if not audio_url or not image_url:
             return {"error": "driven_audio and source_image URLs are required."}
             
-        # 2. 임시 파일 저장 경로 지정
         os.makedirs('/tmp/input', exist_ok=True)
         os.makedirs('/tmp/output', exist_ok=True)
         
@@ -38,7 +34,6 @@ def handler(event):
         download_file(audio_url, audio_path)
         download_file(image_url, image_path)
         
-        # 3. SadTalker 추론 실행
         cmd = [
             "python", "inference.py",
             "--driven_audio", audio_path,
@@ -50,7 +45,6 @@ def handler(event):
             
         subprocess.run(cmd, check=True)
         
-        # 4. 결과 mp4 파일 찾기 및 Base64 인코딩 반환
         generated_files = [f for f in os.listdir(output_dir) if f.endswith('.mp4')]
         if not generated_files:
             return {"error": "Video generation failed."}
