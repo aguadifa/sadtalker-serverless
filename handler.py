@@ -1,8 +1,16 @@
 import runpod
 import subprocess
 import os
-import urllib.request
+import requests
 import base64
+
+def download_file(url, save_path):
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    response = requests.get(url, headers=headers, stream=True)
+    response.raise_for_status()
+    with open(save_path, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
 
 def handler(job):
     job_input = job['input']
@@ -15,8 +23,9 @@ def handler(job):
     img_path = '/tmp/input/image.png'
     audio_path = '/tmp/input/audio.wav'
     
-    urllib.request.urlretrieve(source_image, img_path)
-    urllib.request.urlretrieve(driven_audio, audio_path)
+    # User-Agent 적용한 안전한 다운로드
+    download_file(source_image, img_path)
+    download_file(driven_audio, audio_path)
     
     cmd = [
         'python', 'inference.py',
