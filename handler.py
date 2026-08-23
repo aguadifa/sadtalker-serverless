@@ -2,28 +2,34 @@ import runpod
 import subprocess
 import os
 import urllib.request
-
-# 모델 파일 다운로드 함수
-def download_file(url, path):
-    if not os.path.exists(path):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        print(f"Downloading {path}...")
-        urllib.request.urlretrieve(url, path)
-        print(f"Downloaded {path}")
+from huggingface_hub import snapshot_download
 
 def prepare_models():
-    models = {
-        "checkpoints/SadTalker_V0.0.2_256.safetensors": "https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/SadTalker_V0.0.2_256.safetensors",
-        "checkpoints/SadTalker_V0.0.2_512.safetensors": "https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/SadTalker_V0.0.2_512.safetensors",
-        "checkpoints/mapping_00109-model.pth.tar": "https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/mapping_00109-model.pth.tar",
-        "checkpoints/mapping_00229-model.pth.tar": "https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/mapping_00229-model.pth.tar",
+    os.makedirs("checkpoints", exist_ok=True)
+    os.makedirs("gfpgan/weights", exist_ok=True)
+    
+    # SadTalker 핵심 체크포인트 다운로드 (HuggingFace)
+    print("Downloading SadTalker checkpoints from HuggingFace...")
+    snapshot_download(
+        repo_id="vinthony/SadTalker",
+        local_dir="checkpoints",
+        local_dir_use_symlinks=False
+    )
+    
+    # GFPGAN / Facexlib 모델 다운로드
+    gfpgan_urls = {
         "gfpgan/weights/alignment_WFLW_400_100_0.pth": "https://github.com/xinntao/facexlib/releases/download/v0.1.0/alignment_WFLW_400_100_0.pth",
         "gfpgan/weights/detection_Resnet50_Final.pth": "https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth",
         "gfpgan/weights/GFPGANv1.4.pth": "https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth",
         "gfpgan/weights/parsing_parsenet.pth": "https://github.com/xinntao/facexlib/releases/download/v0.2.2/parsing_parsenet.pth"
     }
-    for path, url in models.items():
-        download_file(url, path)
+    for path, url in gfpgan_urls.items():
+        if not os.path.exists(path):
+            print(f"Downloading {path}...")
+            try:
+                urllib.request.urlretrieve(url, path)
+            except Exception as e:
+                print(f"Failed to download {path}: {e}")
 
 prepare_models()
 
