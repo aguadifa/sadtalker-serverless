@@ -1,65 +1,66 @@
-import os
-import sys
-import base64
-import requests
-import subprocess
 import runpod
+import subprocess
+import os
+import urllib.request
 
-def download_file(url, save_path):
-    response = requests.get(url, stream=True)
-    if response.status_code == 200:
-        with open(save_path, 'wb') as f:
-            for chunk in response.iter_content(1024):
-                f.write(chunk)
-    else:
-        raise Exception(f"Download failed: {url}")
+# 모델 파일 다운로드 함수
+def download_file(url, path):
+    if not os.path.exists(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        print(f"Downloading {path}...")
+        urllib.request.urlretrieve(url, path)
+        print(f"Downloaded {path}")
 
-def handler(event):
-    try:
-        job_input = event.get('input', {})
-        audio_url = job_input.get('driven_audio')
-        image_url = job_input.get('source_image')
-        still = job_input.get('still', True)
-        
-        if not audio_url or not image_url:
-            return {"error": "driven_audio and source_image URLs are required."}
-            
-        os.makedirs('/tmp/input', exist_ok=True)
-        os.makedirs('/tmp/output', exist_ok=True)
-        
-        audio_path = "/tmp/input/audio.wav"
-        image_path = "/tmp/input/image.png"
-        output_dir = "/tmp/output"
-        
-        download_file(audio_url, audio_path)
-        download_file(image_url, image_path)
-        
-        cmd = [
-            "python", "inference.py",
-            "--driven_audio", audio_path,
-            "--source_image", image_path,
-            "--result_dir", output_dir
-        ]
-        if still:
-            cmd.append("--still")
-            
-        subprocess.run(cmd, check=True)
-        
-        generated_files = [f for f in os.listdir(output_dir) if f.endswith('.mp4')]
-        if not generated_files:
-            return {"error": "Video generation failed."}
-            
-        result_video_path = os.path.join(output_dir, generated_files[0])
-        
-        with open(result_video_path, "rb") as video_file:
-            encoded_video = base64.b64encode(video_file.read()).decode('utf-8')
-            
-        return {
-            "status": "success",
-            "video_base64": encoded_video
-        }
+def prepare_models():
+    models = {
+        "checkpoints/SadTalker_V0.0.2_256.safetensors": "https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/SadTalker_V0.0.2_256.safetensors",
+        "checkpoints/SadTalker_V0.0.2_512.safetensors": "https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/SadTalker_V0.0.2_512.safetensors",
+        "checkpoints/mapping_00109-model.pth.tar": "https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/mapping_00109-model.pth.tar",
+        "checkpoints/mapping_00229-model.pth.tar": "https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/mapping_00229-model.pth.tar",
+        "gfpgan/weights/alignment_WFLW_400_100_0.pth": "https://github.com/xinntao/facexlib/releases/download/v0.1.0/alignment_WFLW_400_100_0.pth",
+        "gfpgan/weights/detection_Resnet50_Final.pth": "https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth",
+        "gfpgan/weights/GFPGANv1.4.pth": "https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth",
+        "gfpgan/weights/parsing_parsenet.pth": "https://github.com/xinntao/facexlib/releases/download/v0.2.2/parsing_parsenet.pth"
+    }
+    for path, url in models.items():
+        download_file(url, path)
 
-    except Exception as e:
-        return {"error": str(e)}
+prepare_models()
+
+def handler(job):
+    job_input = job['input']
+    source_image = job_input.get('source_image')
+    driven_audio = job_input.get('driven_audio')
+    
+    os.makedirs('/tmp/input', exist_ok=True)
+    os.makedirs('/tmp/output', exist_ok=True)
+    
+    img_path = '/tmp/input/image.png'
+    audio_path = '/tmp/input/audio.wav'
+    
+    urllib.request.urlretrieve(source_image, img_path)
+    urllib.request.urlretrieve(driven_audio, audio_path)
+    
+    cmd = [
+        'python', 'inference.py',
+        '--driven_audio', audio_path,
+        '--source_image', img_path,
+        '--result_dir', '/tmp/output',
+        '--still'
+    ]
+    
+    subprocess.run(cmd, check=True)
+    
+    output_files = os.listdir('/tmp/output')
+    mp4_files = [f for f in output_files if f.endswith('.mp4')]
+    if not mp4_files:
+        raise Exception("No output video generated")
+        
+    res_path = os.path.join('/tmp/output', mp4_files[0])
+    import base64
+    with open(res_path, 'rb') as f:
+        encoded = base64.b64encode(f.read()).decode('utf-8')
+        
+    return {"video_base64": encoded}
 
 runpod.serverless.start({"handler": handler})
