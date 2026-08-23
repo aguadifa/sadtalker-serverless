@@ -89,7 +89,12 @@ class CropAndExtract():
                 if source_image_flag:
                     break
 
-        x_full_frames= [cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  for frame in full_frames] 
+        img_bgr = cv2.imread(png_path)
+        if img_bgr is None:
+            img_bgr = cv2.imread(input_path)
+        if img_bgr is None:
+            raise ValueError(f'Cannot read image from {input_path}')
+        x_full_frames = [cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)] 
 
         #### crop images as the 
         if 'crop' in crop_or_resize.lower(): # default crop
