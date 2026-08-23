@@ -2,36 +2,7 @@ import runpod
 import subprocess
 import os
 import urllib.request
-from huggingface_hub import snapshot_download
-
-def prepare_models():
-    os.makedirs("checkpoints", exist_ok=True)
-    os.makedirs("gfpgan/weights", exist_ok=True)
-    
-    # SadTalker 핵심 체크포인트 다운로드 (HuggingFace)
-    print("Downloading SadTalker checkpoints from HuggingFace...")
-    snapshot_download(
-        repo_id="vinthony/SadTalker",
-        local_dir="checkpoints",
-        local_dir_use_symlinks=False
-    )
-    
-    # GFPGAN / Facexlib 모델 다운로드
-    gfpgan_urls = {
-        "gfpgan/weights/alignment_WFLW_400_100_0.pth": "https://github.com/xinntao/facexlib/releases/download/v0.1.0/alignment_WFLW_400_100_0.pth",
-        "gfpgan/weights/detection_Resnet50_Final.pth": "https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth",
-        "gfpgan/weights/GFPGANv1.4.pth": "https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth",
-        "gfpgan/weights/parsing_parsenet.pth": "https://github.com/xinntao/facexlib/releases/download/v0.2.2/parsing_parsenet.pth"
-    }
-    for path, url in gfpgan_urls.items():
-        if not os.path.exists(path):
-            print(f"Downloading {path}...")
-            try:
-                urllib.request.urlretrieve(url, path)
-            except Exception as e:
-                print(f"Failed to download {path}: {e}")
-
-prepare_models()
+import base64
 
 def handler(job):
     job_input = job['input']
@@ -52,18 +23,21 @@ def handler(job):
         '--driven_audio', audio_path,
         '--source_image', img_path,
         '--result_dir', '/tmp/output',
+        '--checkpoint_dir', './checkpoints',
         '--still'
     ]
     
-    subprocess.run(cmd, check=True)
-    
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print("Inference Error Log:", result.stderr)
+        raise Exception(f"Inference failed: {result.stderr}")
+        
     output_files = os.listdir('/tmp/output')
     mp4_files = [f for f in output_files if f.endswith('.mp4')]
     if not mp4_files:
         raise Exception("No output video generated")
         
     res_path = os.path.join('/tmp/output', mp4_files[0])
-    import base64
     with open(res_path, 'rb') as f:
         encoded = base64.b64encode(f.read()).decode('utf-8')
         
